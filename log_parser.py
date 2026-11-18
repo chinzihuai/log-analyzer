@@ -1,7 +1,9 @@
-import re
+"""Find, clean, de-duplicate and parse factory test logs."""
 import hashlib
-from pathlib import Path
+import re
 from collections import Counter
+from pathlib import Path
+
 # One full log line, e.g.
 # 2026-10-20 08:01:01 | SN=A1001 | STATION=ICT | TEST=Voltage_3V3 | VALUE=3.3 | RESULT=PASS
 LINE_RE = re.compile(
@@ -15,9 +17,10 @@ LINE_RE = re.compile(
     """,
     re.VERBOSE | re.IGNORECASE,
 )
-NON_PRINTABLE_RE = re.compile(r"[^\x20-\x7E]")  # anything except printable ASCII
+NON_PRINTABLE_RE = re.compile(r"[^\x20-\x7E]")       # anything except printable ASCII
 DATE_SUFFIX_RE = re.compile(r"_\d{4}-\d{2}-\d{2}$")  # file names end with _YYYY-MM-DD
-SERIAL_RE = re.compile(r"(SN=\w)\w+")  # keep first character, mask the rest
+SERIAL_RE = re.compile(r"(SN=\w)\w+")                # keep first character, mask the rest
+
 
 # ---------- finding files ----------
 
@@ -37,11 +40,33 @@ def find_log_files(log_dir: Path) -> list[Path]:
         files.append(f)
     return sorted(files)
 
+
+def file_hash(path: Path) -> str:
+    return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def drop_duplicate_files(files: list[Path]) -> list[Path]:
+    """Keep one file per unique content; prefer the file closest to the top folder."""
+    seen: dict[str, Path] = {}
+    unique: list[Path] = []
+
+    for f in sorted(files, key=lambda p: (len(p.parts), str(p))):
+        digest = file_hash(f)
+        if digest in seen:
+            print(f"Duplicate file skipped: {f.parent.name}/{f.name} "
+                  f"(same content as {seen[digest].parent.name}/{seen[digest].name})")
+            continue
+        seen[digest] = f
+        unique.append(f)
+    return unique
+
+
 # ---------- parsing ----------
 
 def clean_line(line: str) -> str:
     """Remove non-printable characters, then strip surrounding whitespace."""
     return NON_PRINTABLE_RE.sub("", line).strip()
+
 
 def parse_line(line: str) -> dict | None:
     """Parse one log line into a dict, or return None if it is invalid."""
@@ -52,6 +77,7 @@ def parse_line(line: str) -> dict | None:
     record["value"] = float(record["value"])
     record["result"] = record["result"].upper()
     return record
+
 
 def parse_file(path: Path) -> tuple[list[dict], list[str]]:
     """Return (records, bad_lines) for one log file."""
@@ -70,40 +96,26 @@ def parse_file(path: Path) -> tuple[list[dict], list[str]]:
                 records.append(record)
     return records, bad_lines
 
-def file_hash(path:Path)->str:
-    return hashlib.sha256(path.read_bytes()).hexdigest()
 
-def drop_duplicate_files(files: list[Path]) -> list[Path]:
-    """Keep one file per unique content; prefer the file closest to the top folder."""
-    seen:dict[str,Path]={}
-    unique:list[Path]=[]
-
-    for f in sorted(files,key=lambda p: (len(p.parts), str(p))):
-        digest = file_hash(f)
-        if digest in seen:
-            print(f"Duplicate file skipped: {f.parent.name}/{f.name} "
-                  f"(same content as {seen[digest].parent.name}/{seen[digest].name})")
-            continue
-        seen[digest]=f
-        unique.append(f)
-    return unique
+# ---------- de-duplicating records ----------
 
 def drop_duplicate_records(records: list[dict]) -> list[dict]:
-    seen:dict[tuple,dict]={}
-    unique:list[dict]=[]
+    """Drop records with the same (time, sn, station, test); warn on conflicting values."""
+    seen: dict[tuple, dict] = {}
+    unique: list[dict] = []
 
     for r in records:
-        key=(r["time"],r["sn"],r["station"],r["test"])
+        key = (r["time"], r["sn"], r["station"], r["test"])
         if key in seen:
-            first_value=seen[key]
-            if first_value["value"]!=r["value"]:
+            first = seen[key]
+            if first["value"] != r["value"]:
                 print(f"CONFLICT: {r['sn']} {r['test']} at {r['time']} "
-                      f"has {first_value['value']} and {r['value']}")
+                      f"has {first['value']} and {r['value']}")
             continue
-        seen[key]=r
+        seen[key] = r
         unique.append(r)
-
     return unique
+
 
 def load_records(log_dir: Path) -> tuple[list[dict], list[str], dict]:
     """Find, de-duplicate and parse all logs. Returns (records, bad_lines, stats)."""
@@ -125,8 +137,10 @@ def load_records(log_dir: Path) -> tuple[list[dict], list[str], dict]:
         "records_parsed": len(records),
         "duplicate_records": len(records) - len(unique_records),
         "bad_lines": len(bad_lines),
+        "files_used": unique_files,   # the files that were actually parsed
     }
     return unique_records, bad_lines, stats
+
 
 def find_retests(records: list[dict]) -> set[tuple[str, str]]:
     """Return (sn, station) pairs where the same test was run more than once."""
