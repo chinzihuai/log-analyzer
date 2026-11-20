@@ -2,3 +2,4 @@ reports
 .vscode
 __pycache__/
 *.py[cod]
+demo.py

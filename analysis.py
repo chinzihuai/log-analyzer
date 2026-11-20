@@ -114,6 +114,16 @@ def yield_table(units: pd.DataFrame, by: str) -> pd.DataFrame:
     t["final_yield_pct"] = (t["final_pass"] / t["units"] * 100).round(1)
     return t
 
+def daily_trend(units: pd.DataFrame) -> pd.DataFrame:
+    """Yield per date, plus the change in first-pass yield versus the previous date."""
+    done = units[units["status"] != "IN_PROGRESS"]
+    t = yield_table(done, "date")
+    t["first_pass_change"] = t["first_pass_yield_pct"].diff().round(1)
+    return t
+
+def top_failing_tests(df: pd.DataFrame, n: int = 5) -> pd.DataFrame:
+    """The n tests with the highest fail rate."""
+    return fail_rate_by_test(df).head(n)
 
 def write_yield_report(units: pd.DataFrame, path: Path) -> None:
     """Write the yield summary. Units still in progress are excluded and counted."""
