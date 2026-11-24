@@ -198,3 +198,11 @@ Highest fail rate: `Freq_Clock`, 8 failures in 105 runs (7.6%).
 - The sample data is synthetic and small. The difference between `line1` (80 units) and `line2` (30 units) may not be statistically meaningful, and the daily trend covers only two days.
 - Only ICT has retests in the sample data, so first-pass and final yield are identical for FCT.
 - Pass or fail comes from the `RESULT` field in the log; the tool does not recompute it from the tolerances.
+
+## Web interface
+
+```
+streamlit run app.py
+```
+
+Enter the log folder in the sidebar and click **Run analysis**.
