@@ -21,6 +21,7 @@ from analysis import (
 )
 from log_parser import SERIAL_RE, find_retests, load_records
 from charts import plot_daily_yield, plot_station_yield, plot_top_failing
+from excel_report import write_excel_report
 
 BASE_DIR = Path(__file__).parent
 LOG_DIR = BASE_DIR / "logs"
@@ -114,6 +115,17 @@ def write_reports(df, units, records, bad_lines, stats, log_dir, report_dir) -> 
     plot_daily_yield(daily_trend(units), chart_dir / "daily_yield.png")
     plot_station_yield(station_yield_table(df), chart_dir / "station_yield.png")
     plot_top_failing(top_failing_tests(df),chart_dir/ "top_failing_tests.png")
+
+    write_excel_report({
+        "Units":units,
+        "Daily trend": daily_trend(units),
+        "Station yield": station_yield_table(df),
+        "Top failing tests": top_failing_tests(df),
+        "Failures": get_failures(df),
+    },
+    report_dir/"yield_report.xlsx",
+    )
+
 # ---------- main ----------
 
 def main(argv: list[str] | None = None) -> int:
